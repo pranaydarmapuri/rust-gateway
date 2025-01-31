@@ -1,16 +1,19 @@
 // src/main.rs
 use axum::{
+    body::Body,
     extract::State,
     http::{Request, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
-    body::Body,
 };
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
-use std::{sync::Arc, time::{SystemTime, UNIX_EPOCH}};
+use std::{
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tower_http::trace::TraceLayer;
 
 // JWT Claims structure
@@ -42,7 +45,7 @@ impl IntoResponse for AppError {
             AppError::AuthError => (StatusCode::UNAUTHORIZED, "Authentication failed"),
             AppError::JWTError(_) => (StatusCode::UNAUTHORIZED, "Invalid token"),
         };
-        
+
         (status, message).into_response()
     }
 }
@@ -70,7 +73,7 @@ async fn auth_middleware(
 
     // Add verified claims to request extensions
     req.extensions_mut().insert(token_data.claims);
-    
+
     Ok(next.run(req).await)
 }
 
@@ -137,13 +140,15 @@ async fn main() {
     });
 
     // Define public routes that don't require authentication
-    let public_routes = Router::new()
-        .route("/login", post(login_handler));
+    let public_routes = Router::new().route("/login", post(login_handler));
 
     // Define protected routes that require authentication
     let protected_routes = Router::new()
         .route("/protected", get(protected_handler))
-        .layer(middleware::from_fn_with_state(config.clone(), auth_middleware));
+        .layer(middleware::from_fn_with_state(
+            config.clone(),
+            auth_middleware,
+        ));
 
     // Combine routes and add middleware
     let app = Router::new()
@@ -153,7 +158,9 @@ async fn main() {
         .with_state(config);
 
     // Start server
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
     tracing::info!("Server running on http://127.0.0.1:3000");
     axum::serve(listener, app).await.unwrap();
 }
